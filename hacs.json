@@ -1,5 +1,4 @@
 {
-  "name": "中国日历",
-  "render_readme": true,
+  "name": "chinese-calendar",
   "homeassistant": "2024.1.0"
 }
