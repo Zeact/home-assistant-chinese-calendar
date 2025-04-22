@@ -1,7 +1,5 @@
-
 """Platform for sensor integration."""
-
-from datetime import timedelta, datetime
+from datetime import timedelta
 import logging
 from homeassistant.core import callback
 from homeassistant.helpers.entity import Entity
@@ -24,7 +22,7 @@ async def async_setup_platform(hass, config, async_add_entities, discovery_info=
 
 class ChineseCalendarSensor(Entity):
     """Representation of Chinese Calendar Sensor."""
-
+    
     def __init__(self, hass):
         """Initialize the sensor."""
         self._attr_name = "Chinese Calendar"
@@ -49,14 +47,11 @@ class ChineseCalendarSensor(Entity):
     def update_internal_state(self):
         """Update the internal state."""
         now = dt_util.now()
-        
         # Only update if date has changed to avoid unnecessary updates
         if now.date() == self._last_update_date:
             return
-            
         try:
             from chinese_calendar import is_workday, get_holiday_detail, is_in_lieu
-            
             on_holiday, holiday_name = get_holiday_detail(now)
             self._data = {
                 "is_workday": is_workday(now),
@@ -66,7 +61,6 @@ class ChineseCalendarSensor(Entity):
                 "last_updated": now.isoformat(),
             }
             self._last_update_date = now.date()
-            
         except Exception as err:  # pylint: disable=broad-except
             _LOGGER.error("Error updating Chinese calendar: %s", err)
             self._data["error"] = str(err)
@@ -76,7 +70,7 @@ class ChineseCalendarSensor(Entity):
         return dt_util.start_of_local_day(dt_util.now() + timedelta(days=1))
 
     @callback
-    def point_in_time_listener(self, *args, **kwargs):
+    def point_in_time_listener(self, _now=None):
         """Callback for scheduled updates."""
         self.update_internal_state()
         self.async_write_ha_state()
