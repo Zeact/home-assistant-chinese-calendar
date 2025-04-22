@@ -1,66 +1,85 @@
+
 """Platform for sensor integration."""
 
 from datetime import timedelta, datetime
+import logging
 from homeassistant.core import callback
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.event import async_track_point_in_time
 import homeassistant.util.dt as dt_util
 
+_LOGGER = logging.getLogger(__name__)
 
 async def async_setup_platform(hass, config, async_add_entities, discovery_info=None):
-    sensor = ChineseCalendarSensor(hass)
-    async_track_point_in_time(
-        hass, sensor.point_in_time_listener, sensor.get_next_interval()
-    )
-    async_add_entities([sensor], True)
-
+    """Set up the sensor platform."""
+    try:
+        sensor = ChineseCalendarSensor(hass)
+        async_track_point_in_time(
+            hass, sensor.point_in_time_listener, sensor.get_next_interval()
+        )
+        async_add_entities([sensor], True)
+    except ImportError as err:
+        _LOGGER.error("Error importing chinese_calendar: %s", err)
+        return False
 
 class ChineseCalendarSensor(Entity):
+    """Representation of Chinese Calendar Sensor."""
+
     def __init__(self, hass):
-        self._data = {}
+        """Initialize the sensor."""
+        self._attr_name = "Chinese Calendar"
+        self._attr_icon = "mdi:calendar"
+        self._attr_should_poll = False
+        self._attr_unique_id = "chinese_calendar_sensor"
         self.hass = hass
+        self._last_update_date = None
+        self._data = {}
         self.update_internal_state()
 
     @property
-    def should_poll(self) -> bool:
-        return False
-
-    @property
-    def name(self):
-        return "chinese_calendar"
-
-    @property
     def state(self):
-        return self._data.get("is_workday") == True and "Workday" or "Holiday"
+        """Return the state of the sensor."""
+        return "workday" if self._data.get("is_workday") else "holiday"
 
     @property
-    def icon(self):
-        return "mdi:calendar"
-
-    @property
-    def device_state_attributes(self):
+    def extra_state_attributes(self):
+        """Return the state attributes."""
         return self._data
 
     def update_internal_state(self):
-        from chinese_calendar import is_workday, get_holiday_detail, is_in_lieu
-
+        """Update the internal state."""
         now = dt_util.now()
-        on_holiday, holiday_name = get_holiday_detail(now)
-        self._data = {
-            "is_workday": is_workday(now),
-            "is_holiday": on_holiday,
-            "holiday_name": holiday_name,
-            "is_in_lieu": is_in_lieu(now),
-        }
+        
+        # Only update if date has changed to avoid unnecessary updates
+        if now.date() == self._last_update_date:
+            return
+            
+        try:
+            from chinese_calendar import is_workday, get_holiday_detail, is_in_lieu
+            
+            on_holiday, holiday_name = get_holiday_detail(now)
+            self._data = {
+                "is_workday": is_workday(now),
+                "is_holiday": on_holiday,
+                "holiday_name": holiday_name,
+                "is_in_lieu": is_in_lieu(now),
+                "last_updated": now.isoformat(),
+            }
+            self._last_update_date = now.date()
+            
+        except Exception as err:  # pylint: disable=broad-except
+            _LOGGER.error("Error updating Chinese calendar: %s", err)
+            self._data["error"] = str(err)
 
     def get_next_interval(self):
+        """Return next update interval."""
         return dt_util.start_of_local_day(dt_util.now() + timedelta(days=1))
 
     @callback
     def point_in_time_listener(self, *args, **kwargs):
+        """Callback for scheduled updates."""
         self.update_internal_state()
-        self.async_schedule_update_ha_state()
-
+        self.async_write_ha_state()
         async_track_point_in_time(
             self.hass, self.point_in_time_listener, self.get_next_interval()
         )
