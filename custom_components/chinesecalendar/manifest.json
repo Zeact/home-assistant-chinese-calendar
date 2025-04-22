@@ -5,4 +5,5 @@
   "requirements": ["chinesecalendar"],
   "codeowners": [],
   "dependencies": []
+  "version": "0.1.0"
 }
